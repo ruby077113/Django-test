@@ -1,40 +1,53 @@
-from django.shortcuts import render
-from rest_framework import viewsets
-
-from order.decorators import check_vip
-from product.models import Product
+from common.viewset import StandardResponseViewSet
+from order.decorators import check_vip, check_product_stock
 from order.models import Order
 from order.serializers import OrderSerializer
-from rest_framework.response import Response
-from rest_framework import status
-
+from rest_framework.decorators import action
+from django.db.models import Sum, F
 
 # Create your views here.
 
 
-class OrderViewSet(viewsets.ModelViewSet):
+class OrderViewSet(StandardResponseViewSet):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
 
-    def perform_create(self, serializer):
-        order = serializer.save()  # 保存序列化器数据到模型实例
-        print(f"Order created: {order.price}, {order.shop_id}")
+    @check_product_stock
+    @check_vip
+    def create(self, request, *args, **kwargs):
+        # print("create", request.data)
+        return super().create(request, *args, **kwargs)
 
-    # def perform_create(self, serializer):
-    #     # 在保存之前可以執行額外的驗證或處理
-    #     if serializer.is_valid():
-    #         print("Validated Data:", serializer.validated_data)
-    #     else:
-    #         # 验证失败，输出错误信息
-    #         print("Validation Errors:", serializer.errors)
+    @check_product_stock
+    def destroy(self, request, *args, **kwargs):
+        kwargs["results"] = {"stock_refill": kwargs.get('stock_refill')}
+        return super().destroy(request, *args,  **kwargs)
 
-    # @check_vip
-    # def create(self, request, *args, **kwargs):
-    #     """
-    #     檢查商品 VIP 條件並建立訂單
-    #     """
-    #     product_id = request.data.get("product_id")
-    #     print("product_id", product_id)
-    #     if (not product_id):
-    #         return Response({"error": "product_id is required"}, status=status.HTTP_400_BAD_REQUEST)
-    #     return super().create(request, *args, **kwargs)
+    @action(detail=False, methods=['get'])
+    def hot_sales_products(self, request):
+        # 取得熱銷商品
+        count = int(request.query_params.get('count', 10)) or 10
+        print("count", count)
+        total_list = Order.objects.values('product_id').annotate(
+            total_qty=Sum('qty')).order_by('-total_qty')[:count]
+
+        print("total_list", total_list.count())
+        return super().response(request, data=total_list, status_code=200)
+
+# def perform_create(self, serializer):
+#     # 在保存之前可以執行額外的驗證或處理
+#     # 庫存處理邏輯會自動在模型的save()中觸發
+#     print("perform_create", serializer.validated_data)
+#     product = serializer.validated_data['product']
+#     qty = serializer.validated_data['qty']
+#     product.stock_pcs = product.stock_pcs-qty
+#     product.save()
+#     serializer.save()
+
+# def perform_update(self, serializer):
+#     # 庫存處理邏輯會自動在模型的save()中觸發
+#     serializer.save()
+
+# def perform_destroy(self, instance):
+#     # 刪除訂單會自動在模型的 delete() 中恢復庫存
+#     instance.delete()

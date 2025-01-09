@@ -20,15 +20,27 @@ class Order(models.Model):
         verbose_name = 'Order Information'
 
     def save(self, *args, **kwargs):
-        if self.product:
-            # product = Product.objects.get(id=self.product.id)
-            print("product", self.product)
-            print("price", self.product.price)
-            print("shop_id", self.product.shop_id)
-            # self.price = self.product.price
-            # self.shop_id = self.product.shop_id
-            self.price = 100.00
-            self.shop_id = 'um'
-        else:
-            print("No product found, price and shop_id not set.")
+        print("Order save")
+        if not self.pk:  # 創建
+            if self.product:
+                self.price = self.product.price
+                self.shop_id = self.product.shop_id
+                self.product.stock_pcs -= self.qty
+                self.product.save()
+            else:
+                print("No product found, price and shop_id not set.")
+        else:  # 更新
+            pass
+
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        print("Order delete")
+        self.product.stock_pcs += self.qty  # 恢復庫存
+        self.product.save()
+        super().delete(*args, **kwargs)
+
+    def create(self, validated_data):
+        print("Order create")
+        super().create(validated_data)
+        # pass

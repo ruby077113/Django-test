@@ -24,15 +24,21 @@
           text-align: center;
         }
       }
+      .alert-area {
+        position: fixed;
+        top: 0;
+        right: 0;
+      }
+      .margin-right {
+        margin-right: 10px;
+      }
     </style>
   </head>
   <body id="bg">
     <section class="container" style="width: 60vw">
       <div class="row py-4">
         <div class="col">
-          <select class="form-select" id="product-select">
-            <option selected>Select Product</option>
-          </select>
+          <select class="form-select" id="product-select"></select>
         </div>
         <div class="col" style="display: flex; height: 40px">
           <input
@@ -92,14 +98,14 @@
         </thead>
         <tbody id="order-tbody"></tbody>
       </table>
+      <p class="lead">超級熱賣</p>
+      <div id="top-sales"></div>
     </section>
   </body>
   <script>
     const baseURL = "http://127.0.0.1:8000";
     window.onload = async function () {
-      // document.getElementById("bg").style.backgroundColor = "lightblue";
-      fetchProductList();
-      fetchOrderList();
+      refreshList();
     };
     // Listener
     const orderSubmitBtn = document.getElementById("submit-btn");
@@ -108,16 +114,21 @@
       const data = getCreateOrderData();
       try {
         const response = await createOrder(data);
-        fetchOrderList();
+        refreshList();
       } catch (error) {
         alert("訂單建立失敗");
       }
     });
     orderTbody.addEventListener("click", async function (e) {
-      console.log("delete", e.target.id);
+      if (e.target.tagName !== "BUTTON") return;
       const orderId = Number(e.target.id.replace("delete-btn-", ""));
-      await deleteOrder(orderId);
-      fetchOrderList();
+      const response = await deleteOrder(orderId);
+      const stockRefill = response.results["stock_refill"];
+      handleAlertMessage(
+        stockRefill ? "好棒棒的產品又進貨囉" : "訂單刪除成功",
+        "success"
+      );
+      refreshList();
     });
     // API
     async function fetchProductList() {
@@ -125,7 +136,7 @@
         const response = await fetch(`${baseURL}/api/product`).then(
           (response) => response.json()
         );
-        createProductTableRow(response);
+        createProductTableRow(response.results);
         return response;
       } catch (error) {
         console.error("error", error);
@@ -136,14 +147,13 @@
         const response = await fetch(`${baseURL}/api/order`).then((response) =>
           response.json()
         );
-        createOrderTableRow(response);
+        createOrderTableRow(response.results);
         return response;
       } catch (error) {
         console.error("error", error);
       }
     }
     async function createOrder(payload) {
-      console.log("payload", payload);
       try {
         const response = await fetch(`${baseURL}/api/order/`, {
           method: "POST", // HTTP 方法
@@ -151,11 +161,14 @@
             "Content-Type": "application/json", // 告訴伺服器資料類型
           },
           body: JSON.stringify(payload), // 將 JavaScript 物件轉為 JSON
-        }).then((response) => {
-          return response.json();
         });
+        const data = await response.json();
+        if (response.status >= 400) {
+          throw new Error(data.message);
+        }
+        return data;
       } catch (error) {
-        console.error("error", error);
+        handleAlertMessage(error, "danger");
       }
     }
     async function deleteOrder(orderId) {
@@ -168,9 +181,25 @@
         console.error("error", error);
       }
     }
+    async function getHotSalesProducts(count) {
+      try {
+        const response = await fetch(
+          `${baseURL}/api/order/hot_sales_products/${
+            count ? `?count=${count}` : ""
+          }`
+        ).then((response) => response.json());
+        createTopSales(response.results);
+        return response.results;
+      } catch (error) {}
+    }
+    function refreshList() {
+      fetchProductList();
+      fetchOrderList();
+      getHotSalesProducts(3);
+    }
+
     // data
     function getCreateOrderData() {
-      console.log("order submit");
       const productSelect = document.getElementById("product-select");
       const productQty = document.getElementById("product-qty");
       const vipCheckbox = document.getElementById("vip-checkbox");
@@ -187,21 +216,23 @@
     function createProductTableRow(productList) {
       const tbody = document.getElementById("product-tbody");
       const productSelect = document.getElementById("product-select");
+      productSelect.replaceChildren();
       productNameList = [];
       tbody.innerHTML = productList
         .map((product) => {
           productNameList.push(`<option>${product.id}</option>`);
           return `
-            <tr>
-              <td>${product.id}</td>
-              <td>${product.stock_pcs}</td>
-              <td>${product.price}</td>
-              <td>${product.shop_id}</td>
-              <td>${product.vip}</td>
-            </tr>
-          `;
+              <tr>
+                <td>${product.id}</td>
+                <td>${product.stock_pcs}</td>
+                <td>${product.price}</td>
+                <td>${product.shop_id}</td>
+                <td>${product.vip}</td>
+              </tr>
+            `;
         })
         .join("");
+      productSelect.innerHTML = "<option selected>Select Product</option>";
       productSelect.innerHTML += productNameList.join("");
     }
     function createOrderTableRow(orderList) {
@@ -210,22 +241,53 @@
         .map(
           (order) =>
             `
-            <tr>
-              <td>${order.id}</td>
-              <td>${order.product_id}</td>
-              <td>${order.qty}</td>
-              <td>${order.price || "-"}</td>
-              <td>${order.shop_id || "-"}</td>
-              <td>${order.customer_id}</td>
-              <td> <button
-            type="button"
-            class="btn btn-outline-secondary delete-btns" 
-            id="delete-btn-${order.id}"
-          >
-            -
-          </button></td>
-            </tr>
-          `
+              <tr>
+                <td>${order.id}</td>
+                <td>${order.product_id}</td>
+                <td>${order.qty}</td>
+                <td>${order.price || "-"}</td>
+                <td>${order.shop_id || "-"}</td>
+                <td>${order.customer_id}</td>
+                <td> <button
+              type="button"
+              class="btn btn-outline-secondary delete-btns"
+              id="delete-btn-${order.id}"
+            >
+              -
+            </button></td>
+              </tr>
+            `
+        )
+        .join("");
+    }
+    function handleAlertMessage(message, type) {
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `
+    <div class="alert-area" id="message-div">
+      <div class="alert alert-${type}" role="alert">
+        ${message}
+      </div>
+    </div>`
+      );
+      // 兩秒後消失
+      setTimeout(() => {
+        const alertElement = document.getElementById("message-div");
+        if (alertElement) {
+          alertElement.remove(); // 移除錯誤訊息
+        }
+      }, 2000);
+    }
+    function createTopSales(products) {
+      const topSales = document.getElementById("top-sales");
+      topSales.innerHTML = "";
+      topSales.innerHTML = products
+        .map(
+          (product) =>
+            `<span class="badge bg-primary m-2">
+            productId: ${product.product_id} / qty:
+            <span class="badge bg-secondary">${product.total_qty}</span>
+            </span>`
         )
         .join("");
     }
