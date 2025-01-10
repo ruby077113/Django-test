@@ -45,7 +45,6 @@ def check_product_stock(func):
                 return Response({'message': 'Order not found.'}, status=status.HTTP_406_NOT_ACCEPTABLE)
 
         # solution 1: 從Product model中取得Product instance
-        # print("product decorated", product_id)
         try:
             product = Product.objects.get(id=product_id)
             kwargs['stock_refill'] = False

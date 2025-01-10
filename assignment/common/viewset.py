@@ -2,7 +2,7 @@ from rest_framework.response import Response
 from rest_framework import status, viewsets
 
 
-def standard_response(data, status_code=200, error_message="", results=None, **kwargs, ):
+def standard_response(data=[], status_code=200, error_message="", results=None, **kwargs, ):
     response_data = {
         'status_code': status_code,
         'error_message': error_message,

@@ -27,11 +27,9 @@ class OrderViewSet(StandardResponseViewSet):
     def hot_sales_products(self, request):
         # 取得熱銷商品
         count = int(request.query_params.get('count', 10)) or 10
-        print("count", count)
         total_list = Order.objects.values('product_id').annotate(
             total_qty=Sum('qty')).order_by('-total_qty')[:count]
 
-        print("total_list", total_list.count())
         return super().response(request, data=total_list, status_code=200)
 
 # def perform_create(self, serializer):

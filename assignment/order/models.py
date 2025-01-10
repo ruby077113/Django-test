@@ -27,11 +27,8 @@ class Order(models.Model):
                 self.shop_id = self.product.shop_id
                 self.product.stock_pcs -= self.qty
                 self.product.save()
-            else:
-                print("No product found, price and shop_id not set.")
         else:  # 更新
             pass
-
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
